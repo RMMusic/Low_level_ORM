@@ -10,7 +10,17 @@ class DataBaseWorker
 {
     protected $_mySqlConnect;
     protected $_currentTable;
-    protected $_where;
+    protected $_sampleData = null;
+
+
+    public function getData()
+    {
+        if (!$this->_sampleData) {
+            $this->_sampleData = $this->_generation();
+        }
+
+        return $this->_sampleData;
+    }
 
     /**
      * @param $dataBaseHost
@@ -68,34 +78,76 @@ class DataBaseWorker
         return $result;
     }
 
-    public function select($columns = array(), $tableName = null)
+    public function select($columns = array(), $tableName = null, $where = array())
     {
-
-        $where = (!empty($this->where)) ? $this->where : 1;
-
         $columns = empty($columns) ? array('*') : $columns;
 
         $columnsData = implode(', ', $columns);
-        $query = "SELECT $columnsData FROM {$this->_getTableName($tableName)}WHERE $where";
+        $query = "SELECT $columnsData FROM {$this->_getTableName($tableName)} {$this->_where($where)}";
         $result = mysqli_query($this->_mySqlConnect, $query);
         $data =  mysqli_fetch_all($result, MYSQLI_ASSOC);
         return $data;
     }
 
-    public function delete($tableName = null)
+    public function delete($tableName = null, $where = array())
     {
-
-        $where = (!empty($this->where)) ? $this->where : 1;
-
-        $query = "DELETE FROM {$this->_getTableName($tableName)}WHERE $where";
+        $query = "DELETE FROM {$this->_getTableName($tableName)} {$this->_where($where)}";
         $result = mysqli_query($this->_mySqlConnect, $query);
-        $data =  mysqli_fetch_all($result, MYSQLI_ASSOC);
-        return $data;
+        return $result;
     }
 
-    public function where($str)
+    public function update($tableName = null, $set = array(), $where = array())
     {
-        $this->_where=$this->_where.' '.$str.' ';
+        $setData = '';
+        foreach ($set as $key => $values){
+            $setData .= $key . '="' . $values . '", ';
+        }
+        $a = rtrim($setData, ', ');
+
+        $query = "UPDATE {$this->_getTableName($tableName)} SET $a {$this->_where($where)}";
+        $result = mysqli_query($this->_mySqlConnect, $query);
+        return $result;
+    }
+
+    protected function _where(array $arrayWhere)
+    {
+        $conditionData = array();
+
+        foreach ($arrayWhere as $column => $condition) {
+            $columnWhereData = array();
+
+            if (!is_array($condition)) {
+                $condition = array("=" => $condition);
+            }
+
+            foreach ($condition as $operation => $value) {
+                $columnWhereData[] = $this ->_getMappedCondition($column, $operation, $value);
+            }
+
+            $conditionData[] = implode(' AND ', $columnWhereData);
+        }
+
+        $conditionString = "WHERE " . (count($conditionData) ? " (" . implode(') AND (', $conditionData) . ")" : '1');
+
+        return $conditionString;
+    }
+
+    protected function _getMappedCondition($column, $operation, $value)
+    {
+
+        $mapping = array(
+            "=" => "$column = '$value'",
+            ">" => "$column > '$value'",
+            "<" => "$column < '$value'",
+            ">=" => "$column >= '$value'",
+            "<=" => "$column <= '$value'",
+            "!=" => "$column <> '$value'",
+            "in" => $column . ( is_array($value) ? " IN ('" . implode("','", $value) . "')" : " = '$value'" ),
+            "not in" => $column . ( is_array($value) ? " NOT IN ('" . implode("','", $value) . "')" : " = '$value'" ),
+            "null" => $column . ($value == true ? " IS NULL" : " IS NOT NULL"),
+        );
+
+        return array_key_exists($operation, $mapping) ? $mapping[$operation] : "";
     }
 
     /**
@@ -118,13 +170,30 @@ class DataBaseWorker
 
 $a = new DataBaseWorker('localhost', 'root', '', 'progectFormdb');
 $a->setCurrentTable('names');
-$inData = array(
-    'name'=>'Hi'
-);
-echo $a->insert($inData);
+$a->update('names', array('name'=>'Yoyo'), array('email'=>'fghfg'));
 
-$inData = array('name', 'email');
-var_dump($a->select($inData, 'names'));
+
+//$select = array(
+//    "name" => "John",
+//    "email" => array(
+//        '!=' => 'Jhoy@mail.ua'
+//    )
+//);
+
+//$third = array(
+//    "name" => "Taras",
+//    "age" => array(
+//        ">" => "26",
+//        "<" => "36",
+//        "null" => false,
+//    ),
+//);
+
+//echo $a->insert($inData);
+
+//$inData = array('name', 'email');
+
+
 
 
 
